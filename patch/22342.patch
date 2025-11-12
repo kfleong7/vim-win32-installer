@@ -1,0 +1,219 @@
+# HG changeset patch
+# User kfleong
+# Date 1440502022 -28800
+#      Tue Aug 25 19:27:02 2015 +0800
+# Node ID f41d8c2f3b48c650db83be81d47df0895c2bd106
+# Parent  f4c6375ca3d3f088e88d7ceb4d8ce2fae7535604
+imported patch vim-view-with-patch
+
+diff --git a/src/GvimExt/gvimext.cpp b/src/GvimExt/gvimext.cpp
+--- a/src/GvimExt/gvimext.cpp
++++ b/src/GvimExt/gvimext.cpp
+@@ -35,15 +35,6 @@
+  * enough */
+ #define BUFSIZE 1100
+ 
+-// The "Edit with Vim" shell extension provides these choices when
+-// a new instance of Gvim is selected:
+-//   - use tabpages
+-//   - enable diff mode
+-//   - none of the above
+-#define EDIT_WITH_VIM_USE_TABPAGES (2)
+-#define EDIT_WITH_VIM_IN_DIFF_MODE (1)
+-#define EDIT_WITH_VIM_NO_OPTIONS   (0)
+-
+ //
+ // Get the name of the Gvim executable to use, with the path.
+ // When "runtime" is non-zero, we were called to find the runtime directory.
+@@ -695,11 +686,23 @@
+ 	free(mii.dwTypeData);
+ 
+ 	mii.wID = idCmd++;
++	mii.dwTypeData = W(_("View with Vim using tabpages"));
++	mii.cch = wcslen(mii.dwTypeData);
++	InsertMenuItemW(hMenu, indexMenu++, TRUE, &mii);
++	free(mii.dwTypeData);
++
++	mii.wID = idCmd++;
+ 	mii.dwTypeData = W(_("Edit with single &Vim"));
+ 	mii.cch = wcslen(mii.dwTypeData);
+ 	InsertMenuItemW(hMenu, indexMenu++, TRUE, &mii);
+ 	free(mii.dwTypeData);
+ 
++	mii.wID = idCmd++;
++	mii.dwTypeData = W(_("View with single Vim"));
++	mii.cch = wcslen(mii.dwTypeData);
++	InsertMenuItemW(hMenu, indexMenu++, TRUE, &mii);
++	free(mii.dwTypeData);
++
+ 	if (cbFiles <= 4)
+ 	{
+ 	    // Can edit up to 4 files in diff mode
+@@ -708,10 +711,17 @@
+ 	    mii.cch = wcslen(mii.dwTypeData);
+ 	    InsertMenuItemW(hMenu, indexMenu++, TRUE, &mii);
+ 	    free(mii.dwTypeData);
+-	    m_edit_existing_off = 3;
++
++	    mii.wID = idCmd++;
++	    mii.dwTypeData = W(_("Diff with Vim (read only)"));
++	    mii.cch = wcslen(mii.dwTypeData);
++	    InsertMenuItemW(hMenu, indexMenu++, TRUE, &mii);
++	    free(mii.dwTypeData);
++
++	    m_edit_existing_off = 6;
+ 	}
+ 	else
+-	    m_edit_existing_off = 2;
++	    m_edit_existing_off = 4;
+ 
+     }
+     else
+@@ -721,7 +731,14 @@
+ 	mii.cch = wcslen(mii.dwTypeData);
+ 	InsertMenuItemW(hMenu, indexMenu++, TRUE, &mii);
+ 	free(mii.dwTypeData);
+-	m_edit_existing_off = 1;
++
++	mii.wID = idCmd++;
++	mii.dwTypeData = W(_("View with Vim"));
++	mii.cch = wcslen(mii.dwTypeData);
++	InsertMenuItemW(hMenu, indexMenu++, TRUE, &mii);
++	free(mii.dwTypeData);
++
++	m_edit_existing_off = 2;
+     }
+ 
+     HMENU hSubMenu = NULL;
+@@ -735,6 +752,7 @@
+ 	mii.hSubMenu = hSubMenu;
+ 	InsertMenuItemW(hMenu, indexMenu++, TRUE, &mii);
+ 	free(mii.dwTypeData);
++
+ 	mii.fMask = mii.fMask & ~MIIM_SUBMENU;
+ 	mii.hSubMenu = NULL;
+     }
+@@ -812,7 +830,6 @@
+ STDMETHODIMP CShellExt::InvokeCommand(LPCMINVOKECOMMANDINFO lpcmi)
+ {
+     HRESULT hr = E_INVALIDARG;
+-    int gvimExtraOptions;
+ 
+     // If HIWORD(lpcmi->lpVerb) then we have been called programmatically
+     // and lpVerb is a command that should be invoked.  Otherwise, the shell
+@@ -834,35 +851,59 @@
+ 	}
+ 	else
+ 	{
++		LPCMINVOKECOMMANDINFOEX lpcmiex = (LPCMINVOKECOMMANDINFOEX)lpcmi;
++		LPCWSTR currentDirectory = lpcmi->cbSize == sizeof(CMINVOKECOMMANDINFOEX) ? lpcmiex->lpDirectoryW : NULL;
++
+ 	    switch (idCmd)
+ 	    {
+ 		case 0:
+-		    gvimExtraOptions = EDIT_WITH_VIM_USE_TABPAGES;
++		    hr = InvokeSingleGvim(lpcmi->hwnd,
++			    currentDirectory,
++			    lpcmi->lpVerb,
++			    lpcmi->lpParameters,
++			    lpcmi->nShow,
++			    L" -p");
+ 		    break;
+ 		case 1:
+-		    gvimExtraOptions = EDIT_WITH_VIM_NO_OPTIONS;
++		    hr = InvokeSingleGvim(lpcmi->hwnd,
++			    currentDirectory,
++			    lpcmi->lpVerb,
++			    lpcmi->lpParameters,
++			    lpcmi->nShow,
++			    L" -p -R");
+ 		    break;
+ 		case 2:
+-		    gvimExtraOptions = EDIT_WITH_VIM_IN_DIFF_MODE;
++		    hr = InvokeSingleGvim(lpcmi->hwnd,
++			    currentDirectory,
++			    lpcmi->lpVerb,
++			    lpcmi->lpParameters,
++			    lpcmi->nShow);
++		    break;
++		case 3:
++		    hr = InvokeSingleGvim(lpcmi->hwnd,
++			    currentDirectory,
++			    lpcmi->lpVerb,
++			    lpcmi->lpParameters,
++			    lpcmi->nShow,
++			    L" -R");
+ 		    break;
+-		default:
+-		    // If execution reaches this point we likely have an
+-		    // inconsistency between the code that setup the menus
+-		    // and this code that determines what the user
+-		    // selected.  This should be detected and fixed during 
+-		    // development.
+-		    return E_FAIL;
++		case 4:
++		    hr = InvokeSingleGvim(lpcmi->hwnd,
++			    currentDirectory,
++			    lpcmi->lpVerb,
++			    lpcmi->lpParameters,
++			    lpcmi->nShow,
++			    L" -d");
++		    break;
++		case 5:
++		    hr = InvokeSingleGvim(lpcmi->hwnd,
++			    currentDirectory,
++			    lpcmi->lpVerb,
++			    lpcmi->lpParameters,
++			    lpcmi->nShow,
++			    L" -d -R");
++		    break;
+ 	    }
+-
+-            LPCMINVOKECOMMANDINFOEX lpcmiex = (LPCMINVOKECOMMANDINFOEX)lpcmi;
+-            LPCWSTR currentDirectory = lpcmi->cbSize == sizeof(CMINVOKECOMMANDINFOEX) ? lpcmiex->lpDirectoryW : NULL;
+-
+-	    hr = InvokeSingleGvim(lpcmi->hwnd,
+-		    currentDirectory,
+-		    lpcmi->lpVerb,
+-		    lpcmi->lpParameters,
+-		    lpcmi->nShow,
+-		    gvimExtraOptions);
+ 	}
+     }
+     return hr;
+@@ -979,7 +1020,7 @@
+ 				   LPCSTR  /* pszCmd */,
+ 				   LPCSTR  /* pszParam */,
+ 				   int  /* iShowCmd */,
+-				   int gvimExtraOptions)
++				   const wchar_t* argW)
+ {
+     wchar_t	m_szFileUserClickedOn[BUFSIZE];
+     wchar_t	*cmdStrW;
+@@ -992,11 +1033,9 @@
+     if (cmdStrW == NULL)
+ 	return E_FAIL;
+     getGvimInvocationW(cmdStrW);
+-
+-    if (gvimExtraOptions == EDIT_WITH_VIM_IN_DIFF_MODE)
+-	wcscat(cmdStrW, L" -d");
+-    else if (gvimExtraOptions == EDIT_WITH_VIM_USE_TABPAGES)
+-	wcscat(cmdStrW, L" -p");
++    // No need to check for buffer overflow, since it does not rely on user
++    // input.
++    if (argW) wcscat(cmdStrW, argW);
+     for (i = 0; i < cbFiles; i++)
+     {
+ 	DragQueryFileW((HDROP)medium.hGlobal,
+diff --git a/src/GvimExt/gvimext.h b/src/GvimExt/gvimext.h
+--- a/src/GvimExt/gvimext.h
++++ b/src/GvimExt/gvimext.h
+@@ -127,7 +127,7 @@
+ 	    LPCSTR pszCmd,
+ 	    LPCSTR pszParam,
+ 	    int iShowCmd,
+-	    int gvimExtraOptions);
++	    const wchar_t* argW = NULL);
+ 
+ public:
+     int		 m_cntOfHWnd;
