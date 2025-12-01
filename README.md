@@ -1,4 +1,4 @@
-[![Build status](https://ci.appveyor.com/api/projects/status/0x8kevh62dkdt7mu?svg=true)](https://ci.appveyor.com/project/chrisbra/vim-win32-installer)
+[![Build status](https://ci.appveyor.com/api/projects/status/ixllmbmficxih2ow?svg=true)](https://ci.appveyor.com/project/kfleong7/vim-win32-installer)
 [![GitHub All Releases](https://img.shields.io/github/downloads/vim/vim-win32-installer/total)](https://github.com/vim/vim-win32-installer/releases)
 [![Latest GitHub Release](https://img.shields.io/github/v/release/vim/vim-win32-installer)](https://github.com/vim/vim-win32-installer/releases/latest)
 
